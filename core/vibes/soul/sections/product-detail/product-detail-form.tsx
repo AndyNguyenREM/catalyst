@@ -31,6 +31,10 @@ import { Textarea } from '@/vibes/soul/form/textarea';
 import { Button } from '@/vibes/soul/primitives/button';
 import { toast } from '@/vibes/soul/primitives/toaster';
 import { useEvents } from '~/components/analytics/events';
+import {
+  applyVariantMatrixToFields,
+  type VariantOptionRow,
+} from '~/data-transformers/variant-option-matrix';
 import { usePathname, useRouter } from '~/i18n/routing';
 
 import { revalidateCart } from './actions/revalidate-cart';
@@ -75,6 +79,8 @@ export interface ProductDetailFormProps<F extends Field> {
   maxQuantity?: number;
   stockDisplayData?: StockDisplayData;
   backorderDisplayData?: BackorderDisplayData;
+  /** When set, each variant dropdown only lists value IDs that exist in at least one purchasable row. */
+  variantOptionMatrix?: VariantOptionRow[] | null;
 }
 
 export function ProductDetailForm<F extends Field>({
@@ -93,6 +99,7 @@ export function ProductDetailForm<F extends Field>({
   maxQuantity,
   stockDisplayData,
   backorderDisplayData,
+  variantOptionMatrix: variantOptionMatrixProp,
 }: ProductDetailFormProps<F>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -103,7 +110,22 @@ export function ProductDetailForm<F extends Field>({
     return field.persist === true ? { ...acc, [field.name]: parseAsString } : acc;
   }, {});
 
-  const [params] = useQueryStates(searchParams, { shallow: false });
+  const [params, setQueryParams] = useQueryStates(searchParams, { shallow: false });
+
+  const variantOptionMatrix = variantOptionMatrixProp ?? null;
+
+  const { fields: matrixFields, clearQuery: queryVariantPatch } = useMemo(() => {
+    return applyVariantMatrixToFields(fields, variantOptionMatrix, { ...params } satisfies Record<
+      string,
+      string | null | undefined
+    >);
+  }, [fields, params, variantOptionMatrix]);
+
+  useEffect(() => {
+    if (queryVariantPatch) {
+      void setQueryParams(queryVariantPatch);
+    }
+  }, [queryVariantPatch, setQueryParams]);
 
   const onPrefetch = (fieldName: string, value: string) => {
     if (prefetch) {
@@ -115,7 +137,7 @@ export function ProductDetailForm<F extends Field>({
     }
   };
 
-  const defaultValue = fields.reduce<{
+  const defaultValue = matrixFields.reduce<{
     [Key in keyof SchemaRawShape]?: z.infer<SchemaRawShape[Key]>;
   }>(
     (acc, field) => ({
@@ -125,8 +147,15 @@ export function ProductDetailForm<F extends Field>({
     { quantity: minQuantity ?? 1 },
   );
 
+  // `F` is a product-specific field subtype; the matrix only narrows `options` on `Field`
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  const matrixFieldsTyped = matrixFields as F[];
+
+  // `fields` in this initial state is only the first mount’s snapshot; addToCart reuses
+  // `prevState.fields` from the last action result. For variant selection, only the
+  // submitted `FormData` must match the current product; the server schema is permissive.
   const [{ lastResult, successMessage }, formAction] = useActionState(action, {
-    fields,
+    fields: matrixFieldsTyped,
     lastResult: null,
   });
 
@@ -144,9 +173,11 @@ export function ProductDetailForm<F extends Field>({
 
   const [form, formFields] = useForm({
     lastResult,
-    constraint: getZodConstraint(schema(fields, minQuantity, maxQuantity)),
+    constraint: getZodConstraint(schema(matrixFieldsTyped, minQuantity, maxQuantity)),
     onValidate({ formData }) {
-      return parseWithZod(formData, { schema: schema(fields, minQuantity, maxQuantity) });
+      return parseWithZod(formData, {
+        schema: schema(matrixFieldsTyped, minQuantity, maxQuantity),
+      });
     },
     onSubmit(event, { formData }) {
       event.preventDefault();
@@ -210,7 +241,7 @@ export function ProductDetailForm<F extends Field>({
       <form {...getFormProps(form)} action={formAction}>
         <input name="id" type="hidden" value={productId} />
         <div className="space-y-6 pb-8">
-          {fields.map((field) => {
+          {matrixFieldsTyped.map((field) => {
             return (
               <FormField
                 emptySelectPlaceholder={emptySelectPlaceholder}
@@ -348,6 +379,33 @@ function FormField({
       onPrefetch(field.name, value);
     }
   };
+
+  // Keep control value in sync when the matrix removes the current value from the option list
+  useEffect(() => {
+    if (!('options' in field) || !Array.isArray(field.options) || field.options.length === 0) {
+      return;
+    }
+
+    const v = controls.value;
+
+    if (v == null || v === '') {
+      return;
+    }
+
+    const values = field.options.map((o) => {
+      if (typeof o === 'object' && 'value' in o) {
+        return String(o.value);
+      }
+
+      return null;
+    });
+    const allowed = new Set(values.filter((x): x is string => x != null && x !== ''));
+
+    if (!allowed.has(String(v))) {
+      void setParams({ [field.name]: null });
+      controls.change('');
+    }
+  }, [controls, field, field.name, setParams, controls.value]);
 
   switch (field.type) {
     case 'number':

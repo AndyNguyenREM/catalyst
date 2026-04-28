@@ -1,10 +1,10 @@
 import { removeEdgesAndNodes } from '@bigcommerce/catalyst-client';
 import DOMPurify from 'isomorphic-dompurify';
 import { Metadata } from 'next';
-import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
 import { SearchParams } from 'nuqs/server';
+import type { ReactNode } from 'react';
 
 import { Stream, Streamable } from '@/vibes/soul/lib/streamable';
 import { FeaturedProductCarousel } from '@/vibes/soul/sections/featured-product-carousel';
@@ -12,6 +12,7 @@ import { auth, getSessionCustomerAccessToken } from '~/auth';
 import { pricesTransformer } from '~/data-transformers/prices-transformer';
 import { productCardTransformer } from '~/data-transformers/product-card-transformer';
 import { productOptionsTransformer } from '~/data-transformers/product-options-transformer';
+import { buildVariantOptionMatrix } from '~/data-transformers/variant-option-matrix';
 import { getPreferredCurrencyCode } from '~/lib/currency';
 import { getAllProductsCategoryPath } from '~/lib/get-all-products-category-path';
 import { ProductDetail } from '~/lib/makeswift/components/product-detail';
@@ -92,6 +93,8 @@ export default async function Product({ params, searchParams }: Props) {
   if (!baseProduct) {
     return notFound();
   }
+
+  const variantOptionMatrix = buildVariantOptionMatrix(baseProduct.variants);
 
   const streamableProduct = Streamable.from(async () => {
     const options = await searchParams;
@@ -205,21 +208,25 @@ export default async function Product({ params, searchParams }: Props) {
       .filter((video) => video.url) // Only include videos with a URL
       .map((video) => {
         const videoUrl = video.url || '';
-        
+
         // Extract video type and ID from URL
         let videoType = '';
         let videoId = '';
-        
+
         if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
           videoType = 'youtube';
+
           const youtubeRegex =
             /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
           const match = youtubeRegex.exec(videoUrl);
+
           videoId = match?.[1] || '';
         } else if (videoUrl.includes('vimeo.com')) {
           videoType = 'vimeo';
+
           const vimeoRegex = /vimeo\.com\/(\d+)/;
           const match = vimeoRegex.exec(videoUrl);
+
           videoId = match?.[1] || '';
         }
 
@@ -474,15 +481,16 @@ export default async function Product({ params, searchParams }: Props) {
       arr.filter((n) => {
         if (seenKeys.has(n.key)) return false;
         seenKeys.add(n.key);
+
         return true;
       });
-    const metafields = [...fromProduct, ...dedupe(infoMetafieldsExtra), ...dedupe(compatMetafieldsExtra)];
-    const infoMetafields = metafields.filter(
-      (n) => n.key === 'Info' || n.key === 'info',
-    );
-    const compatMetafields = metafields.filter(
-      (n) => n.key === 'compat' || n.key === 'Compat',
-    );
+    const metafields = [
+      ...fromProduct,
+      ...dedupe(infoMetafieldsExtra),
+      ...dedupe(compatMetafieldsExtra),
+    ];
+    const infoMetafields = metafields.filter((n) => n.key === 'Info' || n.key === 'info');
+    const compatMetafields = metafields.filter((n) => n.key === 'compat' || n.key === 'Compat');
 
     const accordions: Array<{ title: string; content: ReactNode }> = [];
 
@@ -493,10 +501,10 @@ export default async function Product({ params, searchParams }: Props) {
           <div>
             {infoMetafields.map((node, index) => (
               <div
-                key={`${node.id}-${index}`}
                 dangerouslySetInnerHTML={{
                   __html: DOMPurify.sanitize(node.value),
                 }}
+                key={`${node.id}-${index}`}
               />
             ))}
           </div>
@@ -511,10 +519,10 @@ export default async function Product({ params, searchParams }: Props) {
           <div>
             {compatMetafields.map((node, index) => (
               <div
-                key={`${node.id}-${index}`}
                 dangerouslySetInnerHTML={{
                   __html: DOMPurify.sanitize(node.value),
                 }}
+                key={`${node.id}-${index}`}
               />
             ))}
           </div>
@@ -633,6 +641,7 @@ export default async function Product({ params, searchParams }: Props) {
           reviewFormAction={submitReview}
           thumbnailLabel={t('ProductDetails.thumbnail')}
           user={streamableUser}
+          variantOptionMatrix={variantOptionMatrix}
         />
       </ProductAnalyticsProvider>
 
@@ -640,9 +649,10 @@ export default async function Product({ params, searchParams }: Props) {
         {(videos) => {
           // Stream callback type says defined; runtime can still be undefined
           const hasVideos = (videos?.length ?? 0) > 0; // eslint-disable-line @typescript-eslint/no-unnecessary-condition
+
           return hasVideos ? (
             <div id="videos">
-              <Videos videos={streamableVideos} title={t('ProductDetails.videos')} />
+              <Videos title={t('ProductDetails.videos')} videos={streamableVideos} />
             </div>
           ) : null;
         }}

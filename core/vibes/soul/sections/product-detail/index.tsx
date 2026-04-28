@@ -8,6 +8,7 @@ import * as Skeleton from '@/vibes/soul/primitives/skeleton';
 import { type Breadcrumb, Breadcrumbs } from '@/vibes/soul/sections/breadcrumbs';
 import { ProductGallery } from '@/vibes/soul/sections/product-detail/product-gallery';
 import { ReviewForm, SubmitReviewAction } from '@/vibes/soul/sections/reviews/review-form';
+import { type VariantOptionRow } from '~/data-transformers/variant-option-matrix';
 
 import {
   BackorderDisplayData,
@@ -68,6 +69,8 @@ export interface ProductDetailProps<F extends Field> {
   reviewFormTitleLabel?: string;
   reviewFormAction: SubmitReviewAction;
   user: Streamable<{ email: string; name: string }>;
+  /** Valid variant option combinations; enables dependent dropdowns on the form. */
+  variantOptionMatrix?: VariantOptionRow[] | null;
 }
 
 // eslint-disable-next-line valid-jsdoc
@@ -109,6 +112,7 @@ export function ProductDetail<F extends Field>({
   reviewFormTitleLabel,
   reviewFormAction,
   user,
+  variantOptionMatrix,
 }: ProductDetailProps<F>) {
   return (
     <section className="@container">
@@ -239,6 +243,7 @@ export function ProductDetail<F extends Field>({
                           productId={product.id}
                           quantityLabel={quantityLabel}
                           stockDisplayData={stockDisplayData ?? undefined}
+                          variantOptionMatrix={variantOptionMatrix ?? null}
                         />
                       )}
                     </Stream>

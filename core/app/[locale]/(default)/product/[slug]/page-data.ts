@@ -2,7 +2,7 @@ import { cache } from 'react';
 
 import { client } from '~/client';
 import { PricingFragment } from '~/client/fragments/pricing';
-import { graphql, VariablesOf } from '~/client/graphql';
+import { graphql, ResultOf, VariablesOf } from '~/client/graphql';
 import { revalidate } from '~/client/revalidate-target';
 import { FeaturedProductsCarouselFragment } from '~/components/featured-products-carousel/fragment';
 import { ProductVariantsInventoryFragment } from '~/components/product-variants-inventory/fragment';
@@ -134,6 +134,137 @@ export const ProductOptionsFragment = graphql(
   ],
 );
 
+/**
+ * Resolves to each purchasable variant’s chosen multiple-choice value per variant option.
+ * `variants.first` is capped at 50 (Storefront API); `getProduct` fetches and merges additional pages.
+ */
+export const ProductVariantMatrixFragment = graphql(`
+  fragment ProductVariantMatrixFragment on Product {
+    variants(first: 50) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          isPurchasable
+          productOptions(first: 30) {
+            edges {
+              node {
+                __typename
+                ... on MultipleChoiceOption {
+                  entityId
+                  isVariantOption
+                  values(first: 50) {
+                    edges {
+                      node {
+                        __typename
+                        ... on MultipleChoiceOptionValue {
+                          entityId
+                          isDefault
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`);
+
+const ProductVariantMatrixPageQuery = graphql(`
+  query ProductVariantMatrixPageQuery($entityId: Int!, $after: String!) {
+    site {
+      product(entityId: $entityId) {
+        variants(first: 50, after: $after) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            node {
+              isPurchasable
+              productOptions(first: 30) {
+                edges {
+                  node {
+                    __typename
+                    ... on MultipleChoiceOption {
+                      entityId
+                      isVariantOption
+                      values(first: 50) {
+                        edges {
+                          node {
+                            __typename
+                            ... on MultipleChoiceOptionValue {
+                              entityId
+                              isDefault
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`);
+
+type VariantMatrixConnection = NonNullable<
+  ResultOf<typeof ProductVariantMatrixFragment>['variants']
+>;
+
+const MAX_VARIANT_MATRIX_PAGE_FETCHES = 200;
+
+async function fetchAllProductVariantMatrixPages(
+  entityId: number,
+  initial: VariantMatrixConnection,
+  customerAccessToken?: string,
+): Promise<VariantMatrixConnection> {
+  let allEdges = [...(initial.edges ?? [])];
+  let { pageInfo } = initial;
+  let pages = 0;
+
+  while (pageInfo.hasNextPage && pageInfo.endCursor && pages < MAX_VARIANT_MATRIX_PAGE_FETCHES) {
+    // eslint-disable-next-line no-await-in-loop -- must fetch pages in order (cursor)
+    const { data } = await client.fetch({
+      document: ProductVariantMatrixPageQuery,
+      variables: { entityId, after: pageInfo.endCursor },
+      customerAccessToken,
+      fetchOptions: customerAccessToken ? { cache: 'no-store' } : { next: { revalidate } },
+    });
+
+    const next = data.site.product?.variants;
+
+    if (!next?.edges?.length) {
+      break;
+    }
+
+    allEdges = allEdges.concat(next.edges);
+    pageInfo = next.pageInfo;
+    pages += 1;
+  }
+
+  // If we stopped at the per-request page cap, avoid implying all variants are loaded
+  if (pageInfo.hasNextPage && pages >= MAX_VARIANT_MATRIX_PAGE_FETCHES) {
+    pageInfo = { ...pageInfo, hasNextPage: false };
+  }
+
+  return {
+    ...initial,
+    edges: allEdges,
+    pageInfo,
+  };
+}
+
 const ProductPageMetadataQuery = graphql(`
   query ProductPageMetadataQuery($entityId: Int!) {
     site {
@@ -193,11 +324,12 @@ const ProductQuery = graphql(
           }
           description
           ...ProductOptionsFragment
+          ...ProductVariantMatrixFragment
         }
       }
     }
   `,
-  [ProductOptionsFragment],
+  [ProductOptionsFragment, ProductVariantMatrixFragment],
 );
 
 export const getProduct = cache(async (entityId: number, customerAccessToken?: string) => {
@@ -208,7 +340,23 @@ export const getProduct = cache(async (entityId: number, customerAccessToken?: s
     fetchOptions: customerAccessToken ? { cache: 'no-store' } : { next: { revalidate } },
   });
 
-  return data.site;
+  const { site } = data;
+
+  if (!site.product?.variants) {
+    return site;
+  }
+
+  return {
+    ...site,
+    product: {
+      ...site.product,
+      variants: await fetchAllProductVariantMatrixPages(
+        entityId,
+        site.product.variants,
+        customerAccessToken,
+      ),
+    },
+  };
 });
 
 const StreamableProductVariantBySkuQuery = graphql(`
@@ -380,7 +528,15 @@ const ProductMetafieldsQuery = graphql(`
   }
 `);
 
-const LIKELY_METAFIELD_KEYS = ['Info', 'info', 'compat', 'Compat', 'product_specifications', 'specifications', 'specs'];
+const LIKELY_METAFIELD_KEYS = [
+  'Info',
+  'info',
+  'compat',
+  'Compat',
+  'product_specifications',
+  'specifications',
+  'specs',
+];
 
 export const getProductMetafields = cache(
   async (
@@ -397,8 +553,11 @@ export const getProductMetafields = cache(
       fetchOptions: customerAccessToken ? { cache: 'no-store' } : { next: { revalidate } },
     });
     const product = data.site.product;
+
     if (!product) return [];
+
     const edges = product.metafields.edges;
+
     if (!edges) return [];
 
     return edges.map((e) => e.node);

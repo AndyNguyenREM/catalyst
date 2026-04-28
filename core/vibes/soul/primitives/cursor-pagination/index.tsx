@@ -9,6 +9,44 @@ import { Suspense } from 'react';
 import { Streamable, useStreamable } from '@/vibes/soul/lib/streamable';
 import { Link } from '~/components/link';
 
+/**
+ * URLSearchParams / `nuqs` can emit different `?` key order on the server than on
+ * the first client render, which makes identical links disagree during hydration.
+ *
+ * @param {string} href Path and query from `createSerializer` (e.g. `?a=1&b=2`).
+ * @returns {string} The same resource with query keys sorted lexicographically.
+ */
+function withStableQueryKeyOrder(href: string): string {
+  const queryIndex = href.indexOf('?');
+
+  if (queryIndex < 0) {
+    return href;
+  }
+
+  const path = href.slice(0, queryIndex);
+  const query = href.slice(queryIndex + 1);
+
+  if (!query) {
+    return href;
+  }
+
+  const params = new URLSearchParams(query);
+  const sorted = new URLSearchParams();
+  const uniqueKeys = Array.from(new Set(Array.from(params.keys()))).sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  uniqueKeys.forEach((key) => {
+    params.getAll(key).forEach((value) => {
+      sorted.append(key, value);
+    });
+  });
+
+  const s = sorted.toString();
+
+  return s ? `${path}?${s}` : path;
+}
+
 export interface CursorPaginationInfo {
   startCursorParamName?: string;
   startCursor?: string | null;
@@ -61,10 +99,12 @@ function CursorPaginationResolved({
           {startCursor != null ? (
             <PaginationLink
               aria-label={previousLabel}
-              href={serialize(searchParams, {
-                [startCursorParamName]: startCursor,
-                [endCursorParamName]: null,
-              })}
+              href={withStableQueryKeyOrder(
+                serialize(searchParams, {
+                  [startCursorParamName]: startCursor,
+                  [endCursorParamName]: null,
+                }),
+              )}
               scroll={scroll}
             >
               <ArrowLeft size={24} strokeWidth={1} />
@@ -79,10 +119,12 @@ function CursorPaginationResolved({
           {endCursor != null ? (
             <PaginationLink
               aria-label={nextLabel}
-              href={serialize(searchParams, {
-                [endCursorParamName]: endCursor,
-                [startCursorParamName]: null,
-              })}
+              href={withStableQueryKeyOrder(
+                serialize(searchParams, {
+                  [endCursorParamName]: endCursor,
+                  [startCursorParamName]: null,
+                }),
+              )}
               scroll={scroll}
             >
               <ArrowRight size={24} strokeWidth={1} />
