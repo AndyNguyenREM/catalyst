@@ -619,26 +619,28 @@ export default async function Product({ params, searchParams }: Props) {
           incrementLabel={t('ProductDetails.increaseQuantity')}
           prefetch={true}
           product={{
-            id: baseProduct.entityId.toString(),
-            title: baseProduct.name,
+            accordions: streameableAccordions,
+            backorderDisplayData: streamableBackorderDisplayData,
             description: <div dangerouslySetInnerHTML={{ __html: baseProduct.description }} />,
             href: baseProduct.path,
+            id: baseProduct.entityId.toString(),
             images: streamableImages,
+            maxQuantity: streamableMaxQuantity,
+            minQuantity: streamableMinQuantity,
+            numberOfReviews: baseProduct.reviewSummary.numberOfReviews,
             price: streamablePrices,
+            rating: baseProduct.reviewSummary.averageRating,
             reviewsEnabled,
             showRating,
-            numberOfReviews: baseProduct.reviewSummary.numberOfReviews,
-            subtitle: baseProduct.brand?.name,
-            rating: baseProduct.reviewSummary.averageRating,
-            accordions: streameableAccordions,
-            minQuantity: streamableMinQuantity,
-            maxQuantity: streamableMaxQuantity,
+            sku: streamableProductSku,
             stockDisplayData: streamableStockDisplayData,
-            backorderDisplayData: streamableBackorderDisplayData,
+            subtitle: baseProduct.brand?.name,
+            title: baseProduct.name,
           }}
           productId={baseProduct.entityId}
           quantityLabel={t('ProductDetails.quantity')}
           reviewFormAction={submitReview}
+          skuLabel={t('ProductDetails.sku')}
           thumbnailLabel={t('ProductDetails.thumbnail')}
           user={streamableUser}
           variantOptionMatrix={variantOptionMatrix}

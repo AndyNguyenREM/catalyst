@@ -25,6 +25,8 @@ interface ProductDetailProduct {
   href: string;
   images: Streamable<Array<{ src: string; alt: string }>>;
   price?: Streamable<Price | null>;
+  /** Resolved for the selected variant (from streamable product). */
+  sku?: Streamable<string | null>;
   subtitle?: string;
   badge?: string;
   rating?: Streamable<number | null>;
@@ -69,6 +71,8 @@ export interface ProductDetailProps<F extends Field> {
   reviewFormTitleLabel?: string;
   reviewFormAction: SubmitReviewAction;
   user: Streamable<{ email: string; name: string }>;
+  /** Label shown before the SKU (e.g. translated "SKU"). */
+  skuLabel?: string;
   /** Valid variant option combinations; enables dependent dropdowns on the form. */
   variantOptionMatrix?: VariantOptionRow[] | null;
 }
@@ -111,6 +115,7 @@ export function ProductDetail<F extends Field>({
   reviewFormSubmitLabel,
   reviewFormTitleLabel,
   reviewFormAction,
+  skuLabel = 'SKU',
   user,
   variantOptionMatrix,
 }: ProductDetailProps<F>) {
@@ -186,6 +191,22 @@ export function ProductDetail<F extends Field>({
                         <PriceLabel className="my-3 text-xl @xl:text-2xl" price={price ?? ''} />
                       )}
                     </Stream>
+                    {product.sku != null && (
+                      <Stream fallback={<SkuLineSkeleton />} value={product.sku}>
+                        {(sku) =>
+                          sku != null && sku !== '' ? (
+                            <p className="-mt-2 mb-3 text-sm text-[var(--product-detail-secondary-text,hsl(var(--contrast-500)))] @xl:text-base">
+                              <span className="font-medium text-[var(--product-detail-primary-text,hsl(var(--foreground)))]">
+                                {skuLabel}:{' '}
+                              </span>
+                              <span className="font-[family-name:var(--product-detail-subtitle-font-family,var(--font-family-mono))]">
+                                {sku}
+                              </span>
+                            </p>
+                          ) : null
+                        }
+                      </Stream>
+                    )}
                   </div>
                   <div className="group/product-gallery mb-8 @2xl:hidden">
                     <Stream fallback={<ProductGallerySkeleton />} value={product.images}>
@@ -313,6 +334,17 @@ function PriceLabelSkeleton() {
   return <Skeleton.Box className="my-5 h-4 w-20 rounded-md" />;
 }
 
+function SkuLineSkeleton() {
+  return (
+    <Skeleton.Root
+      className="-mt-2 mb-3 group-has-[[data-pending]]/product-price:animate-pulse"
+      pending
+    >
+      <Skeleton.Box className="h-3.5 w-40 rounded-md" />
+    </Skeleton.Root>
+  );
+}
+
 function RatingSkeleton() {
   return (
     <Skeleton.Root
@@ -427,6 +459,7 @@ export function ProductDetailSkeleton() {
         <Skeleton.Box className="mb-6 h-6 w-72 rounded-lg" />
         <RatingSkeleton />
         <PriceLabelSkeleton />
+        <SkuLineSkeleton />
         <ProductSummarySkeleton />
         <div className="mb-8 @2xl:hidden">
           <ProductGallerySkeleton />

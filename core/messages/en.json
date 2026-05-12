@@ -436,6 +436,7 @@
   },
   "Product": {
     "ProductDetails": {
+      "sku": "SKU",
       "quantity": "Quantity",
       "increaseQuantity": "Increase quantity",
       "decreaseQuantity": "Decrease quantity",
