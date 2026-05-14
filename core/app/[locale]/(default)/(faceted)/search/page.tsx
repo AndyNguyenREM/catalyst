@@ -12,6 +12,7 @@ import { facetsTransformer } from '~/data-transformers/facets-transformer';
 import { pageInfoTransformer } from '~/data-transformers/page-info-transformer';
 import { productCardTransformer } from '~/data-transformers/product-card-transformer';
 import { getPreferredCurrencyCode } from '~/lib/currency';
+import { resolveVariantSkuHrefQueryByProductIds } from '~/lib/variant-sku-deep-link';
 
 import { MAX_COMPARE_LIMIT } from '../../compare/page-data';
 import { getCompareProducts as getCompareProductsData } from '../fetch-compare-products';
@@ -122,11 +123,19 @@ export default async function Search(props: Props) {
     const { defaultOutOfStockMessage, showOutOfStockMessage, showBackorderMessage } =
       settings?.inventory ?? {};
 
+    const customerAccessToken = await getSessionCustomerAccessToken();
+    const hrefQueryByProductId = await resolveVariantSkuHrefQueryByProductIds(
+      products.map((p) => p.entityId),
+      searchTerm.trim(),
+      customerAccessToken,
+    );
+
     return productCardTransformer(
       products,
       format,
       showOutOfStockMessage ? defaultOutOfStockMessage : undefined,
       showBackorderMessage,
+      hrefQueryByProductId,
     );
   });
 
@@ -245,8 +254,8 @@ export default async function Search(props: Props) {
       emptyStateTitle={streamableEmptyStateTitle}
       filterLabel={t('FacetedSearch.filters')}
       filters={streamableFilters}
-      filtersPanelTitle={t('FacetedSearch.filters')}
       filtersPanelApplyLabel={t('FacetedSearch.applyFilters')}
+      filtersPanelTitle={t('FacetedSearch.filters')}
       maxCompareLimitMessage={t('Compare.maxCompareLimit')}
       maxItems={MAX_COMPARE_LIMIT}
       paginationInfo={streamablePagination}

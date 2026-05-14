@@ -3,11 +3,13 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { SearchResult } from '@/vibes/soul/primitives/navigation';
 import { SearchProductFragment } from '~/components/header/_actions/fragment';
+import { appendPersistedSelectionsToPath } from '~/lib/variant-sku-deep-link';
 
 import { pricesTransformer } from './prices-transformer';
 
 export async function searchResultsTransformer(
   searchProducts: Array<ResultOf<typeof SearchProductFragment>>,
+  options?: { hrefQueryByProductId?: ReadonlyMap<number, string> },
 ): Promise<SearchResult[]> {
   const format = await getFormatter();
   const t = await getTranslations('Components.Header.Search');
@@ -17,11 +19,12 @@ export async function searchResultsTransformer(
     title: t('products'),
     products: searchProducts.map((product) => {
       const price = pricesTransformer(product.prices, format);
+      const query = options?.hrefQueryByProductId?.get(product.entityId);
 
       return {
         id: product.entityId.toString(),
         title: product.name,
-        href: product.path,
+        href: query ? appendPersistedSelectionsToPath(product.path, query) : product.path,
         image: product.defaultImage
           ? { src: product.defaultImage.url, alt: product.defaultImage.altText }
           : undefined,

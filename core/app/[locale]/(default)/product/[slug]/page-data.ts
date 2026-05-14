@@ -163,6 +163,14 @@ export const ProductVariantMatrixFragment = graphql(`
                           entityId
                           isDefault
                         }
+                        ... on SwatchOptionValue {
+                          entityId
+                          isDefault
+                        }
+                        ... on ProductPickListOptionValue {
+                          entityId
+                          isDefault
+                        }
                       }
                     }
                   }
@@ -200,6 +208,14 @@ const ProductVariantMatrixPageQuery = graphql(`
                           node {
                             __typename
                             ... on MultipleChoiceOptionValue {
+                              entityId
+                              isDefault
+                            }
+                            ... on SwatchOptionValue {
+                              entityId
+                              isDefault
+                            }
+                            ... on ProductPickListOptionValue {
                               entityId
                               isDefault
                             }

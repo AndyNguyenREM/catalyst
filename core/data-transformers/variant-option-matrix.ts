@@ -13,6 +13,98 @@ export type VariantOptionRow = Record<string, string>;
 
 type VariantsInMatrix = ResultOf<typeof ProductVariantMatrixFragment>['variants'];
 
+/** Option value types BigCommerce uses on variants for URL-persisted multiple-choice options (incl. swatches). */
+const PERSISTED_VARIANT_VALUE_TYPENAMES = new Set([
+  'MultipleChoiceOptionValue',
+  'SwatchOptionValue',
+  'ProductPickListOptionValue',
+]);
+
+interface PersistedVariantValueNode {
+  __typename: string;
+  entityId: number;
+  isDefault: boolean;
+}
+
+/**
+ * Minimal variant shape for building PDP option query strings (matrix + SKU deep-link queries).
+ * `productOptions` is intentionally loose so GraphQL variant nodes from different queries fit.
+ */
+export interface VariantOptionSource {
+  isPurchasable?: boolean | null;
+  productOptions?: unknown;
+}
+
+/**
+ * Maps variant multiple-choice variant options (dropdowns, swatches, pick lists, etc.) to
+ * option entityId → selected value entityId for PDP URLs.
+ */
+export function getPersistedVariantOptionSelectionsForVariant(
+  variant: VariantOptionSource | null | undefined,
+): VariantOptionRow | null {
+  if (!variant?.isPurchasable) {
+    return null;
+  }
+
+  // GraphQL variant `productOptions` shapes differ by query; narrow for option walk.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- structural union from multiple queries
+  const options = removeEdgesAndNodes(variant.productOptions ?? { edges: [] }) as Array<{
+    __typename?: string;
+    entityId?: number;
+    isVariantOption?: boolean | null;
+    values?: { edges?: Array<{ node: unknown }> | null } | null;
+  }>;
+
+  const row: VariantOptionRow = {};
+
+  for (const option of options) {
+    if (option.__typename !== 'MultipleChoiceOption' || !option.isVariantOption) {
+      continue;
+    }
+
+    if (option.entityId == null) {
+      continue;
+    }
+
+    const rawValues = removeEdgesAndNodes(option.values ?? { edges: [] }) as Array<{
+      __typename?: string;
+      entityId?: number;
+      isDefault?: boolean | null;
+    }>;
+
+    const valueNodes = rawValues
+      .filter((value): value is PersistedVariantValueNode => {
+        if (
+          value.__typename == null ||
+          !PERSISTED_VARIANT_VALUE_TYPENAMES.has(value.__typename) ||
+          typeof value.entityId !== 'number'
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .map((value) => ({
+        __typename: value.__typename,
+        entityId: value.entityId,
+        isDefault: Boolean(value.isDefault),
+      }));
+
+    if (valueNodes.length === 0) {
+      continue;
+    }
+
+    const chosen =
+      valueNodes.length === 1
+        ? valueNodes[0]!
+        : (valueNodes.find((n) => n.isDefault) ?? valueNodes[0]!);
+
+    row[option.entityId.toString()] = chosen.entityId.toString();
+  }
+
+  return Object.keys(row).length === 0 ? null : row;
+}
+
 /**
  * For each purchasable variant, maps variant option entityId → value entityId.
  */
@@ -27,41 +119,9 @@ export function buildVariantOptionMatrix(
   const rows: VariantOptionRow[] = [];
 
   for (const variant of removeEdgesAndNodes(variants)) {
-    if (!variant.isPurchasable) {
-      continue;
-    }
+    const row = getPersistedVariantOptionSelectionsForVariant(variant);
 
-    const options = removeEdgesAndNodes(variant.productOptions);
-    const row: VariantOptionRow = {};
-
-    for (const option of options) {
-      if (option.__typename !== 'MultipleChoiceOption' || !option.isVariantOption) {
-        continue;
-      }
-
-      const valueNodes = removeEdgesAndNodes(option.values).filter(
-        (
-          value,
-        ): value is {
-          __typename: 'MultipleChoiceOptionValue';
-          entityId: number;
-          isDefault: boolean;
-        } => value.__typename === 'MultipleChoiceOptionValue',
-      );
-
-      if (valueNodes.length === 0) {
-        continue;
-      }
-
-      const chosen =
-        valueNodes.length === 1
-          ? valueNodes[0]!
-          : (valueNodes.find((n) => n.isDefault) ?? valueNodes[0]!);
-
-      row[option.entityId.toString()] = chosen.entityId.toString();
-    }
-
-    if (Object.keys(row).length === 0) {
+    if (!row) {
       continue;
     }
 

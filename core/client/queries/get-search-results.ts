@@ -6,6 +6,10 @@ import { client } from '~/client';
 import { graphql } from '~/client/graphql';
 import { revalidate } from '~/client/revalidate-target';
 import { ProductCardFragment } from '~/components/product-card/fragment';
+import {
+  appendPersistedSelectionsToPath,
+  resolveVariantSkuHrefQueryByProductIds,
+} from '~/lib/variant-sku-deep-link';
 
 const GetQuickSearchResultsQuery = graphql(
   `
@@ -54,11 +58,24 @@ export const getSearchResults = cache(async (searchTerm: string, locale?: string
     });
 
     const { products } = response.data.site.search.searchProducts;
+    const productNodes = removeEdgesAndNodes(products);
+    const hrefQueryByProductId = await resolveVariantSkuHrefQueryByProductIds(
+      productNodes.map((p) => p.entityId),
+      searchTerm.trim(),
+      customerAccessToken,
+    );
 
     return {
       status: 'success',
       data: {
-        products: removeEdgesAndNodes(products),
+        products: productNodes.map((p) => {
+          const variantQuery = hrefQueryByProductId.get(p.entityId);
+
+          return {
+            ...p,
+            path: variantQuery ? appendPersistedSelectionsToPath(p.path, variantQuery) : p.path,
+          };
+        }),
       },
     };
   } catch (error: unknown) {

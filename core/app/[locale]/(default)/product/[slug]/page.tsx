@@ -13,9 +13,15 @@ import { pricesTransformer } from '~/data-transformers/prices-transformer';
 import { productCardTransformer } from '~/data-transformers/product-card-transformer';
 import { productOptionsTransformer } from '~/data-transformers/product-options-transformer';
 import { buildVariantOptionMatrix } from '~/data-transformers/variant-option-matrix';
+import { redirect } from '~/i18n/routing';
 import { getPreferredCurrencyCode } from '~/lib/currency';
 import { getAllProductsCategoryPath } from '~/lib/get-all-products-category-path';
 import { ProductDetail } from '~/lib/makeswift/components/product-detail';
+import {
+  appendPersistedSelectionsToPath,
+  isLikelySkuSearchTerm,
+  resolveVariantSkuHrefQueryStringForProduct,
+} from '~/lib/variant-sku-deep-link';
 
 import { addToCart } from './_actions/add-to-cart';
 import { submitReview } from './_actions/submit-review';
@@ -92,6 +98,31 @@ export default async function Product({ params, searchParams }: Props) {
 
   if (!baseProduct) {
     return notFound();
+  }
+
+  const resolvedSearchParams = await searchParams;
+  const skuParam = resolvedSearchParams.sku;
+  let skuFromQuery = '';
+
+  if (typeof skuParam === 'string') {
+    skuFromQuery = skuParam.trim();
+  } else if (Array.isArray(skuParam)) {
+    skuFromQuery = skuParam[0]?.trim() ?? '';
+  }
+
+  if (skuFromQuery && isLikelySkuSearchTerm(skuFromQuery)) {
+    const optionQuery = await resolveVariantSkuHrefQueryStringForProduct(
+      productId,
+      skuFromQuery,
+      customerAccessToken,
+    );
+
+    if (optionQuery) {
+      redirect({
+        href: appendPersistedSelectionsToPath(baseProduct.path, optionQuery),
+        locale,
+      });
+    }
   }
 
   const variantOptionMatrix = buildVariantOptionMatrix(baseProduct.variants);

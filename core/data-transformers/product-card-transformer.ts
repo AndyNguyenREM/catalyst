@@ -5,6 +5,7 @@ import { getFormatter } from 'next-intl/server';
 import { Product } from '@/vibes/soul/primitives/product-card';
 import { ExistingResultType } from '~/client/util';
 import { ProductCardFragment } from '~/components/product-card/fragment';
+import { appendPersistedSelectionsToPath } from '~/lib/variant-sku-deep-link';
 
 import { pricesTransformer } from './prices-transformer';
 
@@ -50,11 +51,14 @@ export const singleProductCardTransformer = (
   format: ExistingResultType<typeof getFormatter>,
   outOfStockMessage?: string,
   showBackorderMessage?: boolean,
+  hrefQueryByProductId?: ReadonlyMap<number, string>,
 ): Product => {
+  const query = hrefQueryByProductId?.get(product.entityId);
+
   return {
     id: product.entityId.toString(),
     title: product.name,
-    href: product.path,
+    href: query ? appendPersistedSelectionsToPath(product.path, query) : product.path,
     image: product.defaultImage
       ? { src: product.defaultImage.url, alt: product.defaultImage.altText }
       : undefined,
@@ -71,8 +75,15 @@ export const productCardTransformer = (
   format: ExistingResultType<typeof getFormatter>,
   outOfStockMessage?: string,
   showBackorderMessage?: boolean,
+  hrefQueryByProductId?: ReadonlyMap<number, string>,
 ): Product[] => {
   return products.map((product) =>
-    singleProductCardTransformer(product, format, outOfStockMessage, showBackorderMessage),
+    singleProductCardTransformer(
+      product,
+      format,
+      outOfStockMessage,
+      showBackorderMessage,
+      hrefQueryByProductId,
+    ),
   );
 };

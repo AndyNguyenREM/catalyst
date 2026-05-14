@@ -13,6 +13,7 @@ import { graphql } from '~/client/graphql';
 import { revalidate } from '~/client/revalidate-target';
 import { searchResultsTransformer } from '~/data-transformers/search-results-transformer';
 import { getPreferredCurrencyCode } from '~/lib/currency';
+import { resolveVariantSkuHrefQueryByProductIds } from '~/lib/variant-sku-deep-link';
 
 import { SearchProductFragment } from './fragment';
 
@@ -92,10 +93,16 @@ export async function search(
     });
 
     const { products } = response.data.site.search.searchProducts;
+    const productNodes = removeEdgesAndNodes(products);
+    const hrefQueryByProductId = await resolveVariantSkuHrefQueryByProductIds(
+      productNodes.map((p) => p.entityId),
+      submission.value.term.trim(),
+      customerAccessToken,
+    );
 
     return {
       lastResult: submission.reply(),
-      searchResults: await searchResultsTransformer(removeEdgesAndNodes(products)),
+      searchResults: await searchResultsTransformer(productNodes, { hrefQueryByProductId }),
       emptyStateTitle,
       emptyStateSubtitle,
     };
