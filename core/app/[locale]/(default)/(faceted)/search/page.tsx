@@ -286,6 +286,7 @@ export default async function Search(props: Props) {
 
   return (
     <ProductsListSection
+      aspectRatio="4:3"
       breadcrumbs={[
         { label: t('Search.Breadcrumbs.home'), href: '/' },
         { label: t('Search.Breadcrumbs.search'), href: `#` },
