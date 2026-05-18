@@ -11,8 +11,13 @@ import { getSessionCustomerAccessToken } from '~/auth';
 import { facetsTransformer } from '~/data-transformers/facets-transformer';
 import { pageInfoTransformer } from '~/data-transformers/page-info-transformer';
 import { productCardTransformer } from '~/data-transformers/product-card-transformer';
+import { redirect } from '~/i18n/routing';
 import { getPreferredCurrencyCode } from '~/lib/currency';
-import { resolveVariantSkuHrefQueryByProductIds } from '~/lib/variant-sku-deep-link';
+import {
+  appendPersistedSelectionsToPath,
+  isLikelySkuSearchTerm,
+  resolveVariantSkuHrefQueryByProductIds,
+} from '~/lib/variant-sku-deep-link';
 
 import { MAX_COMPARE_LIMIT } from '../../compare/page-data';
 import { getCompareProducts as getCompareProductsData } from '../fetch-compare-products';
@@ -70,10 +75,47 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+async function redirectIfSingleSkuVariantMatch(
+  searchParams: SearchParams,
+  locale: string,
+): Promise<void> {
+  const term = typeof searchParams.term === 'string' ? searchParams.term : '';
+
+  if (!isLikelySkuSearchTerm(term)) {
+    return;
+  }
+
+  const customerAccessToken = await getSessionCustomerAccessToken();
+  const currencyCode = await getPreferredCurrencyCode();
+  const search = await fetchFacetedSearch(searchParams, currencyCode, customerAccessToken);
+  const hrefQueryByProductId = await resolveVariantSkuHrefQueryByProductIds(
+    search.products.items.map((item) => item.entityId),
+    term.trim(),
+    customerAccessToken,
+  );
+  const matches = search.products.items.filter((item) => hrefQueryByProductId.has(item.entityId));
+
+  if (matches.length !== 1) {
+    return;
+  }
+
+  const product = matches[0];
+  const optionQuery = product ? hrefQueryByProductId.get(product.entityId) : undefined;
+
+  if (product && optionQuery) {
+    redirect({
+      href: appendPersistedSelectionsToPath(product.path, optionQuery),
+      locale,
+    });
+  }
+}
+
 export default async function Search(props: Props) {
   const { locale } = await props.params;
 
   setRequestLocale(locale);
+
+  await redirectIfSingleSkuVariantMatch(await props.searchParams, locale);
 
   const t = await getTranslations('Faceted');
 

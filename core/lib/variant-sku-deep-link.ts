@@ -11,18 +11,20 @@ import {
 import {
   appendPersistedSelectionsToPath,
   isLikelySkuSearchTerm,
+  skuLookupKeys,
+  skusMatch,
 } from './variant-sku-deep-link-utils';
 
 export { appendPersistedSelectionsToPath, isLikelySkuSearchTerm };
 
 const BatchVariantSkuByProductIdsQuery = graphql(`
-  query BatchVariantSkuByProductIds($entityIds: [Int!]!, $first: Int!, $sku: String!) {
+  query BatchVariantSkuByProductIds($entityIds: [Int!]!, $first: Int!, $skus: [String!]!) {
     site {
       products(entityIds: $entityIds, first: $first) {
         edges {
           node {
             entityId
-            variants(skus: [$sku]) {
+            variants(skus: $skus) {
               edges {
                 node {
                   sku
@@ -90,9 +92,16 @@ async function fetchVariantSkuHrefQueryChunk(
     return map;
   }
 
+  const trimmed = sku.trim();
+  const skus = skuLookupKeys(trimmed);
+
+  if (skus.length === 0) {
+    return map;
+  }
+
   const { data } = await client.fetch({
     document: BatchVariantSkuByProductIdsQuery,
-    variables: { entityIds, first: entityIds.length, sku },
+    variables: { entityIds, first: entityIds.length, skus },
     customerAccessToken,
     fetchOptions: customerAccessToken ? { cache: 'no-store' } : { next: { revalidate } },
   });
@@ -100,9 +109,11 @@ async function fetchVariantSkuHrefQueryChunk(
   const products = removeEdgesAndNodes(data.site.products);
 
   products.forEach((product) => {
-    const variant = removeEdgesAndNodes(product.variants)[0];
+    const variant = removeEdgesAndNodes(product.variants).find((candidate) =>
+      skusMatch(candidate.sku, trimmed),
+    );
 
-    if (!variant || variant.sku !== sku) {
+    if (!variant) {
       return;
     }
 

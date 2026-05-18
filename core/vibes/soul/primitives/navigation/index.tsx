@@ -37,6 +37,7 @@ import { ProductCard } from '@/vibes/soul/primitives/product-card';
 import { Link } from '~/components/link';
 import { usePathname, useRouter } from '~/i18n/routing';
 import { useSearch } from '~/lib/search';
+import { pickSkuDeepLinkHrefFromQuickSearchResults } from '~/lib/variant-sku-deep-link-utils';
 
 import { getLocalizedPathname } from './_actions/localized-pathname';
 
@@ -711,6 +712,7 @@ function SearchForm<S extends SearchResult>({
   searchInputPlaceholder?: string;
   searchSubmitLabel?: string;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [isSearching, startSearching] = useTransition();
   const [{ searchResults, lastResult, emptyStateTitle, emptyStateSubtitle }, formAction] =
@@ -743,9 +745,26 @@ function SearchForm<S extends SearchResult>({
 
   const [form] = useForm({ lastResult });
 
-  const handleSubmit = useCallback(() => {
-    setIsSubmitting(true);
-  }, []);
+  const quickSearchProducts = useMemo(() => {
+    const section = searchResults?.find((result) => result.type === 'products');
+
+    return section?.type === 'products' ? section.products : null;
+  }, [searchResults]);
+
+  const handleSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      setIsSubmitting(true);
+
+      const deepLink = pickSkuDeepLinkHrefFromQuickSearchResults(query.trim(), quickSearchProducts);
+
+      if (deepLink) {
+        event.preventDefault();
+        router.push(deepLink);
+        setIsSubmitting(false);
+      }
+    },
+    [query, quickSearchProducts, router],
+  );
 
   return (
     <>
