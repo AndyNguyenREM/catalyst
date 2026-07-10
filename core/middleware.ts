@@ -28,7 +28,9 @@ export const config = {
      * - sitemap.xml (sitemap route)
      * - xmlsitemap.php (legacy sitemap route)
      * - robots.txt (robots route)
+     * - models (static 3D model files for the build-your-system configurator)
+     * - pagemedia (static page images, e.g. custom landing page heroes)
      */
-    '/((?!api|admin|_next/static|_next/image|_vercel|favicon.ico|xmlsitemap.php|sitemap.xml|robots.txt).*)',
+    '/((?!api|admin|_next/static|_next/image|_vercel|favicon.ico|xmlsitemap.php|sitemap.xml|robots.txt|models|pagemedia).*)',
   ],
 };

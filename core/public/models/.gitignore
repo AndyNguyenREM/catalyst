@@ -1,0 +1,5 @@
+# Raw, unoptimized .glb exports (huge). Kept locally for re-optimizing, not committed.
+# The optimized *.opt.glb files ARE committed and used by the app.
+Chassis.glb
+Grip.glb
+ButtStock.glb

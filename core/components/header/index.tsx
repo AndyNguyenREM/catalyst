@@ -94,8 +94,11 @@ export const Header = async () => {
         }))
     : [];
 
-  // Only show links configured in Makeswift, not preloaded category links
-  const streamableLinks = Streamable.from(() => Promise.resolve([]));
+  // Header links are normally configured in Makeswift. For the Build Your System
+  // prototype we surface it as the first link directly in code.
+  const streamableLinks = Streamable.from(() =>
+    Promise.resolve([{ label: 'BUILD YOUR SYSTEM', href: '/build-your-system' }]),
+  );
 
   const streamableGiftCertificatesEnabled = Streamable.from(async () => {
     const [customerAccessToken, currencyCode] = await Promise.all([
