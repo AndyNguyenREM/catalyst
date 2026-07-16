@@ -119,7 +119,18 @@ const PRODUCT_LAYOUT: Record<string, AssemblyLayout> = {
 };
 
 export function BuildYourSystem({ steps }: { steps: BuilderStep[] }) {
-  const [selections, setSelections] = useState<Record<string, Selection>>({});
+  // Pre-select the required base part when there's only one option (e.g. a single
+  // chassis), so the builder opens straight into configuring it rather than picking it.
+  const [selections, setSelections] = useState<Record<string, Selection>>(() => {
+    const base = steps.find((step) => !step.optional);
+    const only = base?.products.length === 1 ? base.products[0] : undefined;
+
+    if (base && only) {
+      return { [base.id]: { product: only, options: defaultOptionsFor(only) } };
+    }
+
+    return {};
+  });
   const [activeStepId, setActiveStepId] = useState<string>(steps[0]?.id ?? '');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();

@@ -81,7 +81,14 @@ const STEP_CONFIG: Array<{
   // Optional name filter that EXCLUDES matching products (e.g. everything but grips).
   excludeNameFilter?: RegExp;
 }> = [
-  { id: 'chassis', title: 'Chassis', optional: false, match: (n) => /chassis/.test(n) && !/stock/.test(n) },
+  // Only the UD Picatinny Chassis for now (drop the other chassis options).
+  {
+    id: 'chassis',
+    title: 'Chassis',
+    optional: false,
+    match: (n) => /chassis/.test(n) && !/stock/.test(n),
+    nameFilter: /picatinny/i,
+  },
   { id: 'buttstock', title: 'Butt Stocks', optional: true, match: (n) => /stock/.test(n) },
   {
     id: 'buttstock-accessories',
